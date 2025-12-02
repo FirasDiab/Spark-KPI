@@ -1,0 +1,6 @@
+logs/
+*.log
+*.crc
+checkpoints/
+delta/
+__pycache__/
