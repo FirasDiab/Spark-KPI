@@ -1,0 +1,52 @@
+FROM spark:4.0.1-python3
+USER root
+RUN pip install --no-cache-dir pymongo pandas fastparquet fastparquet pyarrow numpy==1.26.4 delta-spark==4.0.0 xgboost scikit-learn
+RUN curl -o /opt/spark/jars/mongo-spark-connector_2.13-10.5.0.jar \
+    https://repo1.maven.org/maven2/org/mongodb/spark/mongo-spark-connector_2.13/10.5.0/mongo-spark-connector_2.13-10.5.0.jar && \
+    curl -o /opt/spark/jars/mongodb-driver-sync-4.11.2.jar \
+    https://repo1.maven.org/maven2/org/mongodb/mongodb-driver-sync/4.11.2/mongodb-driver-sync-4.11.2.jar && \
+    curl -o /opt/spark/jars/mongodb-driver-core-4.11.2.jar \
+    https://repo1.maven.org/maven2/org/mongodb/mongodb-driver-core/4.11.2/mongodb-driver-core-4.11.2.jar && \
+    curl -o /opt/spark/jars/bson-4.11.2.jar \
+    https://repo1.maven.org/maven2/org/mongodb/bson/4.11.2/bson-4.11.2.jar && \
+    curl -o /opt/spark/jars/delta-spark_2.13-4.0.0.jar \
+    https://repo1.maven.org/maven2/io/delta/delta-spark_2.13/4.0.0/delta-spark_2.13-4.0.0.jar && \
+    curl -o /opt/spark/jars/delta-storage-4.0.0.jar \
+    https://repo1.maven.org/maven2/io/delta/delta-storage/4.0.0/delta-storage-4.0.0.jar
+
+COPY sparkTaskSummary.py /app/sparkTaskSummary.py 
+COPY utils/ /app/utils/
+
+
+# Set working directory
+WORKDIR /app
+
+RUN mkdir -p /opt/spark/work-dir && chown 185:185 /opt/spark/work-dir
+# Create log files with correct permissions
+RUN touch /opt/spark/work-dir/cleanup.log /opt/spark/work-dir/cleanup_errors.log
+RUN chown 185:185 /opt/spark/work-dir/cleanup.log /opt/spark/work-dir/cleanup_errors.log
+# COPY utils/cleanup.sh /cleanup.sh
+# RUN chmod +x /cleanup.sh
+
+USER 185
+
+# Entrypoint waits for Spark master to be ready, then submits job
+CMD bash -c '\
+  echo "Spark Master is ready, submitting job..." && \
+    /opt/spark/bin/spark-submit \
+    --conf spark.driver.memory=3g \
+    --conf spark.hadoop.fs.file.impl.disable.cache=true \
+    --conf spark.hadoop.fs.nfs.impl=org.apache.hadoop.fs.nfs.NFSFileSystem \
+    --conf spark.databricks.delta.schema.autoMerge.enabled=true \
+    --conf spark.sql.streaming.stateStore.providerClass=org.apache.spark.sql.execution.streaming.state.RocksDBStateStoreProvider \
+    --conf spark.sql.streaming.rocksdb.compaction.style=universal \
+    --conf spark.sql.streaming.rocksdb.compression.type=snappy \
+    --conf spark.sql.streaming.stateStore.rocksdb.compactOnCommit=true \
+    --conf spark.sql.streaming.stateStore.rocksdb.blockSizeKB=64 \
+    --conf spark.sql.streaming.stateStore.rocksdb.blockCacheSizeMB=2048 \
+    --conf spark.sql.streaming.stateStore.rocksdb.trackTotalNumberOfRows=false \
+    --conf spark.sql.streaming.stateStore.rocksdb.changelogCheckpointing.enabled=true \
+    --conf spark.sql.streaming.stateStore.maintenanceInterval=30s \
+    --conf spark.sql.streaming.minBatchesToRetain=5 \
+    --conf spark.sql.streaming.commitProtocolClass=org.apache.spark.sql.execution.streaming.ManifestFileCommitProtocol \
+   /app/sparkTaskSummary.py'

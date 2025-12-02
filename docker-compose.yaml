@@ -1,0 +1,201 @@
+services:
+  mongodb:
+    image: mongo:6.0
+    container_name: mongo_db
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - /Users/FerasD'yab/sparkTesting/mongo_data:/data/db
+      - /Users/FerasD'yab/sparkTesting/mongo_restore:/data/restore
+    networks:
+      - spark
+
+  spark-aggregation:
+    image: spark-worker:latest
+    build:
+      context: .
+      dockerfile: Dockerfile-driver
+    container_name: spark-aggregation
+    environment:
+      - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+      - SPARK_MASTER_WEBUI_PORT=4040
+      - SPARK_EXECUTION=1
+      - SPARK_MAX_CORES=1
+      - SPARK_PARTITIONS=32
+      - SPARK_MEMORY=1g
+      - DB=TestDB
+    ports:
+      - 4040:4040   # Spark master UI
+      - 4041:4041   # extra UI if needed
+      - 7077:7077   # Spark master port
+    volumes:
+      - "C:/Users/FerasD'yab/Documents/docker-spark/data:/sparkdata"
+      - "C:/Users/FerasD'yab/Documents/docker-spark/logs:/app/logs"
+    networks:
+      - spark
+    restart: "no"
+
+  spark-worker-1:
+    image: spark-worker:latest
+    build:
+      context: .
+      dockerfile: Dockerfile-worker
+    container_name: spark-worker-1
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-aggregation:7077
+      - SPARK_WORKER_WEBUI_PORT=4042
+      - SPARK_WORKER_MEMORY=1g
+      - SPARK_EXECUTOR_MEMORY=1g
+      - SPARK_WORKER_CORES=1
+      - DB=TestDB
+    depends_on:
+      - spark-aggregation
+    ports:
+      - 4042:4042   # Spark worker UI
+    volumes:
+      - "C:/Users/FerasD'yab/Documents/docker-spark/data:/sparkdata"
+      - "C:/Users/FerasD'yab/Documents/docker-spark/logs:/app/logs"
+    networks:
+      - spark
+    restart: "no"
+
+  spark-worker-2:
+    image: spark-worker:latest
+    build:
+      context: .
+      dockerfile: Dockerfile-worker
+    container_name: spark-worker-2
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-aggregation:7077
+      - SPARK_WORKER_WEBUI_PORT=4043
+      - SPARK_WORKER_MEMORY=1g
+      - SPARK_EXECUTOR_MEMORY=1g
+      - SPARK_PARTITIONS=10
+      - SPARK_WORKER_CORES=1
+      - DB=TestDB
+    ports:
+      - 4043:4043   # Spark worker UI
+    volumes:
+      - "C:/Users/FerasD'yab/Documents/docker-spark/data:/sparkdata"
+      - "C:/Users/FerasD'yab/Documents/docker-spark/logs:/app/logs"
+    depends_on:
+      - spark-aggregation
+    networks:
+      - spark
+    restart: "no"
+
+  # ===========================
+  # KPI 1: Handling Fee Summary
+  # ===========================
+  spark-kpi-summary:
+    image: spark-task-summary:latest
+    build:
+      context: .
+    #   if filename is different, specify it explicitly:
+    #   dockerfile: Dockerfile-sparkTaskSummary
+      dockerfile: Dockerfile-sparkTaskSummary
+    container_name: spark-kpi-summary
+    depends_on:
+      - mongodb
+      - spark-aggregation
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/TestDB
+      - DB=TestDB
+      # if your script submits to the master, keep this:
+      - SPARK_MASTER_URL=spark://spark-aggregation:7077
+    volumes:
+      - "C:/Users/FerasD'yab/Documents/docker-spark/data:/sparkdata"
+      - "C:/Users/FerasD'yab/Documents/docker-spark/logs:/app/logs"
+    networks:
+      - spark
+    restart: "no"
+
+  # ============================
+  # KPI 2: Handling Fee Exception
+  # ============================
+  spark-kpi-exception:
+    image: spark-task-exception:latest
+    build:
+      context: .
+      dockerfile: Dockerfile-sparkTaskException
+    container_name: spark-kpi-exception
+    depends_on:
+      - mongodb
+      - spark-aggregation
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/TestDB
+      - DB=TestDB
+      - SPARK_MASTER_URL=spark://spark-aggregation:7077
+    volumes:
+      - "C:/Users/FerasD'yab/Documents/docker-spark/data:/sparkdata"
+      - "C:/Users/FerasD'yab/Documents/docker-spark/logs:/app/logs"
+    networks:
+      - spark
+    restart: "no"
+
+networks:
+  spark:
+    driver: bridge
+
+
+
+  # ========================
+  # NEW: streaming job service
+  # ========================
+  # spark-streaming:
+  #   image: spark-streaming:latest
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile-straeming
+  #   container_name: spark-streaming
+  #   environment:
+  #     - SPARK_MODE=driver              # this container acts as driver for streaming job
+  #     - SPARK_MASTER_URL=spark://spark-aggregation:7077
+  #     - DB=TestDB
+  #   depends_on:
+  #     - mongodb
+  #     - spark-aggregation
+  #     - spark-worker-1
+  #     - spark-worker-2
+  #   volumes:
+  #     - "C:/Users/FerasD'yab/Documents/docker-spark/data:/sparkdata"  # parquet + delta
+  #     - "C:/Users/FerasD'yab/Documents/docker-spark/logs:/app/logs"   # streaming logs
+  #   networks:
+  #     - spark
+  #   restart: "always"    # streaming app should keep running
+
+  # ========================
+  # NEW: top-msisdn batch job service
+  # ========================
+#   spark-topmsisdn:
+#     image: spark-topmsisdn:latest
+#     build:
+#       context: .
+#       dockerfile: Dockerfile-topmsisdn
+#     container_name: spark-topmsisdn
+#     environment:
+#       - SPARK_MODE=driver
+#       - SPARK_MASTER_URL=spark://spark-aggregation:7077
+#       - DB=TestDB
+#     depends_on:
+#       - mongodb
+#       - spark-aggregation
+#       - spark-worker-1
+#       - spark-worker-2
+#     volumes:
+#       - "C:/Users/FerasD'yab/Documents/docker-spark/data:/sparkdata"  # read delta hourly table
+#       - "C:/Users/FerasD'yab/Documents/docker-spark/logs:/app/logs"   # rule engine logs
+#     networks:
+#       - spark
+#     restart: "no"         # batch job runs then exits (good for cron/scheduler)
+
+# networks:
+#   spark:
+#     driver: bridge

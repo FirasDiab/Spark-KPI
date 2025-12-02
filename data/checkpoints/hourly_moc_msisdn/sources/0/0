@@ -1,0 +1,3 @@
+v1
+{"path":"file:///sparkdata/input/IGWB_20250914044116.05610378.dat.parquet","timestamp":1763555285421,"batchId":0}
+{"path":"file:///sparkdata/input/IGWB_20250930113530.06801446.dat.parquet","timestamp":1763629619413,"batchId":0}

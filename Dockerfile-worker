@@ -1,0 +1,36 @@
+FROM spark:4.0.1-python3
+USER root
+RUN pip install --no-cache-dir pymongo pandas fastparquet fastparquet pyarrow numpy==1.26.4 delta-spark==4.0.0 xgboost scikit-learn
+RUN curl -o /opt/spark/jars/mongo-spark-connector_2.13-10.5.0.jar \
+    https://repo1.maven.org/maven2/org/mongodb/spark/mongo-spark-connector_2.13/10.5.0/mongo-spark-connector_2.13-10.5.0.jar && \
+    curl -o /opt/spark/jars/mongodb-driver-sync-4.11.2.jar \
+    https://repo1.maven.org/maven2/org/mongodb/mongodb-driver-sync/4.11.2/mongodb-driver-sync-4.11.2.jar && \
+    curl -o /opt/spark/jars/mongodb-driver-core-4.11.2.jar \
+    https://repo1.maven.org/maven2/org/mongodb/mongodb-driver-core/4.11.2/mongodb-driver-core-4.11.2.jar && \
+    curl -o /opt/spark/jars/bson-4.11.2.jar \
+    https://repo1.maven.org/maven2/org/mongodb/bson/4.11.2/bson-4.11.2.jar && \
+    curl -o /opt/spark/jars/delta-spark_2.13-4.0.0.jar \
+    https://repo1.maven.org/maven2/io/delta/delta-spark_2.13/4.0.0/delta-spark_2.13-4.0.0.jar && \
+    curl -o /opt/spark/jars/delta-storage-4.0.0.jar \
+    https://repo1.maven.org/maven2/io/delta/delta-storage/4.0.0/delta-storage-4.0.0.jar
+
+
+
+RUN mkdir -p /opt/spark/work-dir && chown 185:185 /opt/spark/work-dir
+# Create log files with correct permissions
+RUN touch /opt/spark/work-dir/cleanup.log /opt/spark/work-dir/cleanup_errors.log
+RUN chown 185:185 /opt/spark/work-dir/cleanup.log /opt/spark/work-dir/cleanup_errors.log
+# COPY utils/cleanup.sh /cleanup.sh
+# RUN chmod +x /cleanup.sh
+
+ENV SPARK_NO_DAEMONIZE=true
+
+USER 185
+CMD bash -c '\
+  echo "Starting Spark Worker..." && \
+  /cleanup.sh & \
+  if [ "$SPARK_MODE" == "master" ]; then \
+    /opt/spark/sbin/start-master.sh ; \
+  else \
+    /opt/spark/sbin/start-worker.sh ${SPARK_MASTER_URL}; \
+  fi'
