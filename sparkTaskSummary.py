@@ -3,15 +3,21 @@ from pyspark.sql.types import *
 from pyspark.sql import functions as F
 from datetime import datetime
 
+SPARK_MASTER_URL = "local[*]"
 MONGO_URI = "mongodb://mongo_db:27017"
 DB_NAME = "data"
 COLLECTION = "firas_test"
+SPARK_EXECUTOR_MEMORY = "1g"
+SPARK_MAX_CORES = "2"
+SPARK_EXECUTOR_CORES = "1"
+SPARK_PARTITIONS = "10"
+PARQUET_PATH = "/sparkdata/input/Parquet_Output"
 
 spark = (
     SparkSession
     .builder
     .appName("Spark KPI")
-    .master("local[*]")
+    .master(SPARK_MASTER_URL)
     .config(
         "spark.jars.packages",
         "org.mongodb.spark:mongo-spark-connector_2.12:10.3.0"
@@ -20,9 +26,12 @@ spark = (
         "spark.mongodb.write.connection.uri",
         f"{MONGO_URI}/{DB_NAME}.{COLLECTION}"
     )
+    .config("spark.sql.shuffle.partitions", SPARK_PARTITIONS) \
+    .config("spark.executor.cores", SPARK_EXECUTOR_CORES) \
+    .config("spark.cores.max", SPARK_MAX_CORES) \
+    .config("spark.executor.memory", SPARK_EXECUTOR_MEMORY) \
     .getOrCreate()
 )
-PARQUET_PATH = "/sparkdata/input/Parquet_Output"
 
 df_parquet = spark.read.parquet(PARQUET_PATH)
 
